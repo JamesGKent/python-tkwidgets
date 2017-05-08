@@ -13,10 +13,10 @@ except ImportError:
 	
 class ScrolledFrame(tk.Frame):
 	def __init__(self, master=None, *args, **kwargs):
-		self.scrollbars = None
-		self.scroll_shown= [False, False]
+		self._scrollbars = None
+		self._scroll_shown= [False, False]
 		if ('scrollbars' in kwargs):
-			self.scrollbars = kwargs['scrollbars']
+			self._scrollbars = kwargs['scrollbars']
 			del kwargs['scrollbars']
 			
 		tk.Frame.__init__(self, master, *args, **kwargs)
@@ -48,18 +48,30 @@ class ScrolledFrame(tk.Frame):
 		
 		self.frame.bind('<Configure>', self._reconfigure)
 		
-		self.update_idletasks()
+		self.frame.bind_all("<Button-4>", self.onmousewheel)
+		self.canvas.bind_all("<Button-4>", self.onmousewheel)
+		self.frame.bind_all("<Button-5>", self.onmousewheel)
+		self.canvas.bind_all("<Button-5>", self.onmousewheel)
+		self.frame.bind_all("<MouseWheel>", self.onmousewheel)
+		self.canvas.bind_all("<MouseWheel>", self.onmousewheel)
+		
+		self.frame.bind_all("<Prior>", self.onkeyscroll) # pageup
+		self.canvas.bind_all("<Next>", self.onkeyscroll) # pagedown
+		self.frame.bind_all("<Home>", self.onkeyscroll)
+		self.canvas.bind_all("<End>", self.onkeyscroll)
+		
 		self._showscrollbars()
+
+		self.grid_columnconfigure = self.frame.grid_columnconfigure
+		self.grid_rowconfigure = self.frame.grid_rowconfigure
 	
 	def _reconfigure(self, event=None):
 		f_reqsize = (self.frame.winfo_reqwidth(), self.frame.winfo_reqheight())
-#		f_size = (self.frame.winfo_width(), self.frame.winfo_height()) # shouldn't be needed?
-#		if (f_size[0] > f_reqsize[0]):
-#			self.canvas.itemconfigure(self.frame_id, width=f_reqsize[0])
-#		if (f_size[1] > f_reqsize[1]):
-#			self.canvas.itemconfigure(self.frame_id, height=f_reqsize[1])
 		c_size = (self.canvas.winfo_width(), self.canvas.winfo_height())
-		self.canvas.config(scrollregion="0 0 %s %s" % f_reqsize)
+		f_width = f_reqsize[0] if f_reqsize[0] > c_size[0] else c_size[0]
+		f_height = f_reqsize[1] if f_reqsize[1] > c_size[1] else c_size[1]
+		
+		self.canvas.config(scrollregion="0 0 %s %s" % (f_width, f_height)) # ensure scroll region is clamped to canvas size if frame req is smaller
 		if (f_reqsize[0] < c_size[0]):
 			self.canvas.itemconfigure(self.frame_id, width=c_size[0])
 		else:
@@ -69,48 +81,64 @@ class ScrolledFrame(tk.Frame):
 		else:
 			self.canvas.itemconfigure(self.frame_id, height=f_reqsize[1])
 			
-		if (self.scrollbars == 'auto'):
+		if (self._scrollbars == 'auto'):
 			self._showscrollbars()
 			
 	def _showscrollbars(self):
-		if (self.scrollbars == 'both'):
+		if (self._scrollbars == 'both'):
 			self.vsb.grid(**self.vsb.opts)
 			self.hsb.grid(**self.hsb.opts)
-		elif (self.scrollbars == 'x'):
+		elif (self._scrollbars == 'x'):
 			self.vsb.grid_remove()
 			self.hsb.grid(**self.hsb.opts)
-		elif (self.scrollbars == 'y'):
+		elif (self._scrollbars == 'y'):
 			self.vsb.grid(**self.vsb.opts)
 			self.hsb.grid_remove()
-		elif (self.scrollbars == 'auto'):
+		elif (self._scrollbars == 'auto'):
 			f_reqsize = (self.frame.winfo_reqwidth(), self.frame.winfo_reqheight())
 			c_size = (self.canvas.winfo_width(), self.canvas.winfo_height())
 			# start with vertical
-			if self.scroll_shown[1] == False: # not showing
+			if self._scroll_shown[1] == False: # not showing
 				if (f_reqsize[1] > c_size[1]): # height is greater than canvas so show
 					self.canvas.configure(width=self.canvas.winfo_width() - self.vsb.winfo_reqwidth())
 					self.vsb.grid(**self.vsb.opts)
-					self.scroll_shown[1] = True
+					self._scroll_shown[1] = True
 			else:
 				if (f_reqsize[1] <= c_size[1]): # height is less than canvas so don't show
 					self.vsb.grid_remove()
 					self.canvas.configure(width=self.canvas.winfo_width() + self.vsb.winfo_reqwidth())
-					self.scroll_shown[1] = False
+					self._scroll_shown[1] = False
 					
 			# now horizontal
-			if self.scroll_shown[0] == False: # not showing
+			if self._scroll_shown[0] == False: # not showing
 				if (f_reqsize[0] > c_size[0]): # width is greater than canvas so show
 					self.canvas.configure(height=self.canvas.winfo_height() - self.hsb.winfo_reqheight())
 					self.hsb.grid(**self.hsb.opts)
-					self.scroll_shown[0] = True
+					self._scroll_shown[0] = True
 			else:
 				if (f_reqsize[0] <= c_size[0]): # width is less than canvas so don't show
 					self.hsb.grid_remove()
 					self.canvas.configure(height=self.canvas.winfo_height() + self.hsb.winfo_reqheight())
-					self.scroll_shown[0] = False
+					self._scroll_shown[0] = False
 	
 	def resize(self):
 		self._reconfigure()
+		
+	def onmousewheel(self, event):
+		self.canvas.yview('scroll', -int(event.delta/120),'units')
+		return 'break'
+		
+	def onkeyscroll(self, event):
+		if event.keysym in ['Prior', 'Next', 'Home', 'End']:
+			if (event.keysym == 'Prior'):
+				self.canvas.yview('scroll', -1,'pages')
+			elif (event.keysym == 'Next'):
+				self.canvas.yview('scroll', 1,'pages')
+			elif (event.keysym == 'Home'):
+				self.canvas.yview('moveto', 0)
+			elif (event.keysym == 'End'):
+				self.canvas.yview('moveto', 1)
+			return 'break'
 		
 if __name__ == '__main__':
 	frames = []
@@ -155,5 +183,8 @@ if __name__ == '__main__':
 	root.grid_columnconfigure(2, weight=1)
 	root.grid_rowconfigure(1, weight=1)
 	root.grid_rowconfigure(2, weight=1)
+	
+	for num in range(0, 100):
+		add_row()
 	
 	root.mainloop()
