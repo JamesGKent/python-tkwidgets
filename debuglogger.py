@@ -1,5 +1,3 @@
-#!python3
-
 import logging
 import sys
 import tkinter as tk
@@ -8,7 +6,7 @@ from tkinter.scrolledtext import ScrolledText
 
 __all__ = ["logging",
 		   "StreamToLogger",
-		   "Debug_Logger"]
+		   "DebugLogger"]
  
 class StreamToLogger(object):
 	def __init__(self, logger, log_level=logging.INFO):
@@ -52,6 +50,22 @@ class StreamToLogger(object):
 	def flush(self):
 		pass
 
+class StdOut(object):
+	def __init__(self, parent):
+		self.parent = parent
+	def write(self, buf):
+		self.parent.write(buf, 'stdout')
+	def flush(self):
+		pass
+		
+class StdErr(object):
+	def __init__(self, parent):
+		self.parent = parent
+	def write(self, buf):
+		self.parent.write(buf, 'stderr')
+	def flush(self):
+		pass
+
 class DebugLogger(object):
 	def __init__(self):
 		self.GUI = tk.Toplevel()
@@ -61,13 +75,35 @@ class DebugLogger(object):
 		self.textbox = ScrolledText(self.GUI)
 		self.textbox.configure(state = "disabled")
 		self.textbox.pack(fill = "both", expand = True)
+		self.textbox.tag_config('stdout', foreground='blue')
+		self.textbox.tag_config('stderr', foreground='red')
 		self.GUI.focus()
+		self.stdout = StdOut(self)
+		self.stderr = StdErr(self)
 
-	def write(self, buf):
+	def write(self, buf, type):
 		self.textbox.configure(state = "normal")
-		self.textbox.insert(tk.END, str(buf))
+		self.textbox.insert(tk.END, str(buf), type)
 		self.textbox.configure(state = "disabled")
 		self.textbox.see("end")
 
 	def flush(self):
 		pass
+
+if __name__ == '__main__':
+	import os, sys
+	sys.argv.append('-d')
+	if ("-d" in sys.argv) or ("-D" in sys.argv):
+		debugger = DebugLogger()
+		sys.stdout = debugger.stdout
+		sys.stderr = debugger.stderr
+	else:
+		logdir = os.getenv("APPDATA") + "\\applicationame\\"
+		if not os.path.isdir(logdir):
+			os.makedirs(logdir)
+		logfile = logdir + "applicationname.log"
+		logging.basicConfig(level=logging.DEBUG, format='%(asctime)s:%(levelname)s:%(name)s:%(message)s', filename=logfile, filemode='w')
+		sys.stdout = StreamToLogger(logging.getLogger('STDOUT'), logging.INFO) 
+		sys.stderr = StreamToLogger(logging.getLogger('STDERR'), logging.ERROR)
+	print("test")
+	raise(Error)
