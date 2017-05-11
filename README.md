@@ -20,9 +20,9 @@ an interactive debugging/logging module that redirects any sydout or stderr outp
 example use:
 ```
 if ("-d" in sys.argv) or ("-D" in sys.argv):
-  debugger = Debug_Logger()
-  sys.stdout = debugger
-  sys.stderr = debugger
+  debugger = DebugLogger()
+  sys.stdout = debugger.stdout
+  sys.stderr = debugger.stderr
 else:
   logdir = os.getenv("APPDATA") + "\\applicationame\\"
   if not os.path.isdir(logdir):
