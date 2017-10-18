@@ -32,3 +32,18 @@ else:
   sys.stdout = StreamToLogger(logging.getLogger('STDOUT'), logging.INFO) 
   sys.stderr = StreamToLogger(logging.getLogger('STDERR'), logging.ERROR)
   ```
+
+## Debounce
+a class that allows ignoring repeat keypress/release events that are send by the keyboard driver in most operating systems.
+provides the raw Debounce class, and a couple of subclassed tkinter widgets:
+- DebounceTk
+- DebounceToplevel
+- DebounceFrame
+to subclass a new widget:
+```
+class DebounceTk(Debounce, tk.Tk):
+    pass
+```
+
+then use the bind method on the widget as normal, this adds an optional parameter `debounce` to force the normal behaviour for an event.
+this class supports both genertic `<KeyPress>` and `<KeyRelease>` events along with specific events such as `<KeyPress-a>`
