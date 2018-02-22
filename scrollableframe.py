@@ -53,6 +53,9 @@ class ScrolledFrame:
 		else:
 			# all other attributes (_w, children, etc) are passed to self.inner
 			return getattr(self.frame, item)
+		
+	def __repr__(self):
+		return str(self.outer_frame)
 
 	def _reconfigure(self, event=None):
 		f_reqsize = (self.frame.winfo_reqwidth(), self.frame.winfo_reqheight())
