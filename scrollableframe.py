@@ -1,23 +1,25 @@
 __all__ = ['ScrolledFrame']
 
 try:
-    import tkinter as tk
+	import tkinter as tk
+	from tkinter import ttk
 except ImportError:
-    import Tkinter as tk
+	import Tkinter as tk
+	import ttk
 
 class ScrolledFrame:
 	def __init__(self, master=None, *args, **kwargs):
 		self._scrollbars = kwargs.pop('scrollbars', None)
-		self._scroll_shown= [False, False]
 
 		self.outer_attr = set(dir(tk.Widget)) # a list of attributes that the outer frame should handle
+
 		self.outer_frame = tk.Frame(master)
 
 		self.grid_columnconfigure(1, weight=1)
 		self.grid_rowconfigure(1, weight=1)
 
-		self.vsb = tk.Scrollbar(self.outer_frame, orient='vertical')
-		self.hsb = tk.Scrollbar(self.outer_frame, orient='horizontal')
+		self.vsb = ttk.Scrollbar(self.outer_frame, orient='vertical')
+		self.hsb = ttk.Scrollbar(self.outer_frame, orient='horizontal')
 		self.vsb.opts = {'column':2, 'row':1, 'sticky':'nesw'}
 		self.hsb.opts = {'column':1, 'row':2, 'sticky':'nesw'}
 
@@ -44,6 +46,12 @@ class ScrolledFrame:
 		self.canvas.bind("<Leave>", self._unbind_events)
 
 		self._showscrollbars()
+		
+		for attr in ['grid_columnconfigure',
+					 'grid_rowconfigure',
+					 'winfo_reqwidth',
+					 'winfo_reqheight']: # only remove these once all widgets are set up
+			self.outer_attr.discard(attr)
 
 	def __getattr__(self, item):
 		'''when an attribute is requested, sort out which frame should provide the attribute'''
@@ -53,25 +61,19 @@ class ScrolledFrame:
 		else:
 			# all other attributes (_w, children, etc) are passed to self.inner
 			return getattr(self.frame, item)
-		
+	
 	def __repr__(self):
 		return str(self.outer_frame)
 
 	def _reconfigure(self, event=None):
+		self.update_idletasks()
 		f_reqsize = (self.frame.winfo_reqwidth(), self.frame.winfo_reqheight())
 		c_size = (self.canvas.winfo_width(), self.canvas.winfo_height())
-		f_width = f_reqsize[0] if f_reqsize[0] > c_size[0] else c_size[0]
-		f_height = f_reqsize[1] if f_reqsize[1] > c_size[1] else c_size[1]
+		f_width = max(f_reqsize[0], c_size[0])
+		f_height = max(f_reqsize[1], c_size[1])
 		
 		self.canvas.config(scrollregion="0 0 %s %s" % (f_width, f_height)) # ensure scroll region is clamped to canvas size if frame req is smaller
-		if (f_reqsize[0] < c_size[0]):
-			self.canvas.itemconfigure(self.frame_id, width=c_size[0])
-		else:
-			self.canvas.itemconfigure(self.frame_id, width=f_reqsize[0])
-		if (f_reqsize[1] < c_size[1]):
-			self.canvas.itemconfigure(self.frame_id, height=c_size[1])
-		else:
-			self.canvas.itemconfigure(self.frame_id, height=f_reqsize[1])
+		self.canvas.itemconfigure(self.frame_id, width=f_width, height=f_height)
 			
 		if (self._scrollbars == 'auto'):
 			self._showscrollbars()
@@ -88,30 +90,35 @@ class ScrolledFrame:
 			self.hsb.grid_remove()
 		elif (self._scrollbars == 'auto'):
 			f_reqsize = (self.frame.winfo_reqwidth(), self.frame.winfo_reqheight())
+			of_size = (self.outer_frame.winfo_width(), self.outer_frame.winfo_height())
 			c_size = (self.canvas.winfo_width(), self.canvas.winfo_height())
-			# start with vertical
-			if self._scroll_shown[1] == False: # not showing
-				if (f_reqsize[1] > c_size[1]): # height is greater than canvas so show
-					self.canvas.configure(width=self.canvas.winfo_width() - self.vsb.winfo_reqwidth())
-					self.vsb.grid(**self.vsb.opts)
-					self._scroll_shown[1] = True
+			
+			if (f_reqsize[1] <= of_size[1]) and (f_reqsize[0] <= of_size[0]): # if both smaller
+				show_vert = False
+				show_horz = False
+			elif (f_reqsize[1] > of_size[1]) and (f_reqsize[0] <= of_size[0]): # if taller but narrower
+				show_vert = True
+				show_horz = (f_reqsize[0] > (of_size[0] - self.vsb.winfo_reqwidth())) # if taller but narrower with scrollbar
+			elif (f_reqsize[1] <= of_size[1]) and (f_reqsize[0] > of_size[0]): # wider but shorter
+				show_horz = True
+				show_vert = (f_reqsize[1] > (of_size[1] - self.hsb.winfo_reqheight())) # if wider but shorter with scrollbar
+			else: # both bigger
+				show_vert = True
+				show_horz = True
+					
+			if show_vert:
+				self.canvas.configure(width=of_size[0] - self.vsb.winfo_reqwidth())
+				self.vsb.grid(**self.vsb.opts)
 			else:
-				if (f_reqsize[1] <= c_size[1]): # height is less than canvas so don't show
-					self.vsb.grid_remove()
-					self.canvas.configure(width=self.canvas.winfo_width() + self.vsb.winfo_reqwidth())
-					self._scroll_shown[1] = False
-
-			# now horizontal
-			if self._scroll_shown[0] == False: # not showing
-				if (f_reqsize[0] > c_size[0]): # width is greater than canvas so show
-					self.canvas.configure(height=self.canvas.winfo_height() - self.hsb.winfo_reqheight())
-					self.hsb.grid(**self.hsb.opts)
-					self._scroll_shown[0] = True
+				self.vsb.grid_remove()
+				self.canvas.configure(width=of_size[0])
+			
+			if show_horz:
+				self.canvas.configure(height=of_size[1] - self.hsb.winfo_reqheight())
+				self.hsb.grid(**self.hsb.opts)
 			else:
-				if (f_reqsize[0] <= c_size[0]): # width is less than canvas so don't show
-					self.hsb.grid_remove()
-					self.canvas.configure(height=self.canvas.winfo_height() + self.hsb.winfo_reqheight())
-					self._scroll_shown[0] = False
+				self.hsb.grid_remove()
+				self.canvas.configure(height=of_size[1])
 	
 	def _bind_events(self, event=None):
 		self.frame.bind_all("<Button-4>", self.onmousewheel)
@@ -143,10 +150,9 @@ class ScrolledFrame:
 		"""Linux uses event.num; Windows / Mac uses event.delta"""
 		if event.num == 4 or event.delta == 120:
 			self.canvas.yview_scroll(-1, "units" )
-			return 'break'
 		elif event.num == 5 or event.delta == -120:
 			self.canvas.yview_scroll(1, "units" )
-			return 'break'
+		return 'break'
 		
 	def onkeyscroll(self, event):
 		if event.keysym in ['Prior', 'Next', 'Home', 'End']:
