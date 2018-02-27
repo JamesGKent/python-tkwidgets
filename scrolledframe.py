@@ -90,7 +90,8 @@ class ScrolledFrame:
 			self.hsb.grid_remove()
 		elif (self._scrollbars == 'auto'):
 			f_reqsize = (self.frame.winfo_reqwidth(), self.frame.winfo_reqheight())
-			of_size = (self.outer_frame.winfo_width(), self.outer_frame.winfo_height())
+			padding = 2*int(str(self.outer_frame.cget('bd'))) # account for frame border 
+			of_size = (self.outer_frame.winfo_width() - padding, self.outer_frame.winfo_height() - padding)
 			c_size = (self.canvas.winfo_width(), self.canvas.winfo_height())
 			
 			if (f_reqsize[1] <= of_size[1]) and (f_reqsize[0] <= of_size[0]): # if both smaller
@@ -105,7 +106,7 @@ class ScrolledFrame:
 			else: # both bigger
 				show_vert = True
 				show_horz = True
-					
+			
 			if show_vert:
 				self.canvas.configure(width=of_size[0] - self.vsb.winfo_reqwidth())
 				self.vsb.grid(**self.vsb.opts)
@@ -202,6 +203,7 @@ if __name__ == '__main__':
 	root.title("Test 1")
 
 	sf = ScrolledFrame(root, scrollbars='auto')
+	sf.configure(bd=2, relief="sunken")
 	sf.frame.grid_columnconfigure(1, weight=1)
 	sf.grid(column=1, row=1, columnspan=2, rowspan=2, sticky='nesw')
 	tk.Button(root, text='-', command=del_row).grid(column=3, row=1, sticky='nesw')
@@ -214,7 +216,7 @@ if __name__ == '__main__':
 	root.grid_rowconfigure(1, weight=1)
 	root.grid_rowconfigure(2, weight=1)
 	
-	for num in range(0, 100):
+	for num in range(0, 10):
 		add_row()
 
 	frames2 = []
@@ -260,7 +262,7 @@ if __name__ == '__main__':
 	test2.grid_rowconfigure(1, weight=1)
 	test2.grid_rowconfigure(2, weight=1)
 	
-	for num in range(0, 100):
+	for num in range(0, 10):
 		add_row_2()
 
 	root.mainloop()
