@@ -169,100 +169,12 @@ class ScrolledFrame:
 
 	def resize(self):
 		self._reconfigure()
-
-if __name__ == '__main__':
-	frames = []
-	def add_row():
-		frame = tk.Frame(sf)
-		frame.grid_columnconfigure(1, weight=1)
-		frame.grid_columnconfigure(2, weight=1)
-		frame.grid_rowconfigure(1, weight=1)
-		num = len(frames)
-		tk.Label(frame, text='Test %i' % num).grid(column=1, row=1, sticky="nesw")
-		tk.Entry(frame).grid(column=2, row=1, sticky="nesw")
-		frame.grid(column=1, row=num, sticky='nesw')
-		sf.frame.grid_rowconfigure(num, weight=1)
-		frames.append(frame)
-		sf.resize()
-
-	def del_row():
-		frame = frames.pop()
-		frame.grid_forget()
-		frame.destroy()
-		num = len(frames)
-		sf.frame.grid_rowconfigure(num, weight=0)
-		sf.resize()
-
-	def add_column():
-		pass
-
-	def del_column():
-		pass
-
-	root = tk.Tk()
-	root.title("Test 1")
-
-	sf = ScrolledFrame(root, scrollbars='auto')
-	sf.configure(bd=2, relief="sunken")
-	sf.frame.grid_columnconfigure(1, weight=1)
-	sf.grid(column=1, row=1, columnspan=2, rowspan=2, sticky='nesw')
-	tk.Button(root, text='-', command=del_row).grid(column=3, row=1, sticky='nesw')
-	tk.Button(root, text='+', command=add_row).grid(column=3, row=2, sticky='nesw')
-	tk.Button(root, text='-', command=del_column).grid(column=1, row=3, sticky='nesw')
-	tk.Button(root, text='+', command=add_column).grid(column=2, row=3, sticky='nesw')
-
-	root.grid_columnconfigure(1, weight=1)
-	root.grid_columnconfigure(2, weight=1)
-	root.grid_rowconfigure(1, weight=1)
-	root.grid_rowconfigure(2, weight=1)
-	
-	for num in range(0, 10):
-		add_row()
-
-	frames2 = []
-	def add_row_2():
-		frame = tk.Frame(sf2)
-		frame.grid_columnconfigure(1, weight=1)
-		frame.grid_columnconfigure(2, weight=1)
-		frame.grid_rowconfigure(1, weight=1)
-		num = len(frames2)
-		tk.Label(frame, text='Test %i' % num).grid(column=1, row=1, sticky="nesw")
-		tk.Entry(frame).grid(column=2, row=1, sticky="nesw")
-		frame.grid(column=1, row=num, sticky='nesw')
-		sf2.frame.grid_rowconfigure(num, weight=1)
-		frames2.append(frame)
-		sf2.resize()
-
-	def del_row_2():
-		frame = frames.pop()
-		frame.grid_forget()
-		frame.destroy()
-		num = len(frames)
-		sf2.frame.grid_rowconfigure(num, weight=0)
-		sf2.resize()
-
-	def add_column_2():
-		pass
-
-	def del_column_2():
-		pass
-	test2 = tk.Toplevel()
-	test2.title("Test 2")
-	
-	sf2 = ScrolledFrame(test2, scrollbars='auto')
-	sf2.frame.grid_columnconfigure(1, weight=1)
-	sf2.grid(column=1, row=1, columnspan=2, rowspan=2, sticky='nesw')
-	tk.Button(test2, text='-', command=del_row_2).grid(column=3, row=1, sticky='nesw')
-	tk.Button(test2, text='+', command=add_row_2).grid(column=3, row=2, sticky='nesw')
-	tk.Button(test2, text='-', command=del_column_2).grid(column=1, row=3, sticky='nesw')
-	tk.Button(test2, text='+', command=add_column_2).grid(column=2, row=3, sticky='nesw')
-
-	test2.grid_columnconfigure(1, weight=1)
-	test2.grid_columnconfigure(2, weight=1)
-	test2.grid_rowconfigure(1, weight=1)
-	test2.grid_rowconfigure(2, weight=1)
-	
-	for num in range(0, 10):
-		add_row_2()
-
-	root.mainloop()
+		
+	def get_reqwidth(self):
+		f_reqwidth = self.frame.winfo_reqwidth()
+		padding = 2*int(str(self.outer_frame.cget('bd'))) # account for frame border
+		vsb_width = self.vsb.winfo_width()
+		if (self.frame.winfo_reqheight() > (self.outer_frame.winfo_width() - padding)): # need vert scrollbar
+			return f_reqwidth + padding + vsb_width
+		else:
+			return f_reqwidth + padding
