@@ -19,119 +19,198 @@ class Debounce():
 		class DebounceTk(Debounce, tk.Tk):
 			pass
 	'''
+	
+	# use classname as key to store class bindings
+	# as single dict for all instances
+	_bind_class_dict = {}
+	
+	# 'all' bindings stored here
+	# single dict for all instances
+	_bind_all_dict = {}
+	
 	def bind(self, event, function, debounce=True):
 		'''
 		Override the bind method, acts as normal binding if not KeyPress or KeyRelease
 		type events, optional debounce parameter can be set to false to force normal behavior
 		'''
-		if not hasattr(self, '_binding_dict'):
-			self._binding_dict = {}
-		if not hasattr(self, '_bind_base_class'):
-			for base in self.__class__.__bases__:
-				if base.__name__ != 'Debounce':
-					self._bind_base_class = base
-					break
-		ev = event.replace("<", "").replace(">", "").split('-')
+		self._debounce_init()
+		self._debounce_bind(event, function, debounce,
+			self._binding_dict, self._base.bind)
+			
+	def bind_all(self, event, function, debounce=True):
+		'''
+		Override the bind_all method, acts as normal binding if not KeyPress or KeyRelease
+		type events, optional debounce parameter can be set to false to force normal behavior
+		'''
+		self._debounce_init()
+		self._debounce_bind(event, function, debounce,
+			self._bind_all_dict, self._base.bind_all)
+		
+	def bind_class(self, event, function, debounce=True):
+		'''
+		Override the bind_class method, acts as normal binding if not KeyPress or KeyRelease
+		type events, optional debounce parameter can be set to false to force normal behavior
+		unlike underlying tk bind_class this uses name of class on which its called
+		instead of requireing clas name as a parameter
+		'''
+		self._debounce_init()
+		self._debounce_bind(event, function, debounce,
+			self._bind_class_dict[self.__class__.__name__],
+			self._base.bind_class, self.__class__.__name__)
+			
+	def _debounce_bind(self, event, function, debounce, bind_dict, bind_method, *args):
+		'''
+		internal method to implement binding
+		'''
+		self._debounce_init()
+		# remove special symbols and split at first hyphen if present
+		ev = event.replace("<", "").replace(">", "").split('-', 1)
+		# if debounce and a supported event
 		if (('KeyPress' in ev) or ('KeyRelease' in ev)) and debounce:
-			if len(ev) == 2:
+			if len(ev) == 2: # not generic binding so use keynames as key
 				evname = ev[1]
-			else:
+			else: # generic binding, use event type
 				evname = ev[0]
-			if evname in self._binding_dict:
-				d = self._binding_dict[evname]
-			else:
+			if evname in bind_dict: # if have prev binding use that dict
+				d = bind_dict[evname]
+			else: # no previous binding, create new default dict
 				d = {'has_prev_key_release':None, 'has_prev_key_press':False}
 
+			# add function to dict (as keypress or release depending on name)
 			d[ev[0]] = function
-
-			self._binding_dict[evname] = d
+			# save binding back into dict
+			bind_dict[evname] = d
+			# call base class binding
 			if ev[0] == 'KeyPress':
-				self._bind_base_class.bind(self, event, self._on_key_press_repeat)
+				bind_method(self, *args, sequence=event, func=self._on_key_press_repeat)
 			elif ev[0] == 'KeyRelease':
-				self._bind_base_class.bind(self, event, self._on_key_release_repeat)
+				bind_method(self, *args, sequence=event, func=self._on_key_release_repeat)
 				
-		else:
-			self._bind_base_class.bind(self, event, function)
-		
+		else: # not supported or not debounce, bind as normal
+			bind_method(self, *args, sequence=event, func=function)
+			
+	def _debounce_init(self):
+		# get first base class that isn't Debounce and save ref
+		# this will be used for underlying bind methods
+		if not hasattr(self, '_base'):
+			for base in self.__class__.__bases__:
+				if base.__name__ != 'Debounce':
+					self._base = base
+					break
+		# for instance bindings
+		if not hasattr(self, '_binding_dict'):
+			self._binding_dict = {}
+			
+		# for class bindings
+		try: # check if this class has alread had class bindings
+			cd = self._bind_class_dict[self.__class__.__name__]
+		except KeyError: # create dict to store if not
+			self._bind_class_dict[self.__class__.__name__] = {}
+			
+		# get the current bind tags
+		bindtags = list(self.bindtags())
+		# add our custom bind tag before the origional bind tag
+		index = bindtags.index(self._base.__name__)
+		bindtags.insert(index, self.__class__.__name__)
+		# save the bind tags back to the widget
+		self.bindtags(tuple(bindtags))
+			
 	def _get_evdict(self, event):
 		'''
-		internal method used to get the dictionary that stores the special binding info
+		internal method used to get the dictionaries that store the special binding info
 		'''
-		evdict = None
-		generic = False
-		if event.type == '2':
-			evname = event.keysym
-			if evname not in self._binding_dict:
-				generic = True
-				evname = 'KeyPress'
-			evdict = self._binding_dict[evname]
-		elif event.type == '3':
-			evname = event.keysym
-			if evname not in self._binding_dict:
-				generic = True
-				evname = 'KeyRelease'
-			evdict = self._binding_dict[evname]
-		return evdict, generic
+		dicts = []
+		names = {'2':'KeyPress', '3':'KeyRelease'}
+		# loop through all applicable bindings
+		for d in [self._binding_dict, # instance binding
+			self._bind_class_dict[self.__class__.__name__], # class
+			self._bind_all_dict]: # all
+			evdict = None
+			generic = False
+			if event.type in names: # if supported event
+				evname = event.keysym
+				if evname not in d: # if no specific binding
+					generic = True
+					evname = names[event.type]
+				try:
+					evdict = d[evname]
+				except KeyError:
+					pass
+			if evdict: # found a binding
+				dicts.append((d, evdict, generic))
+		return dicts
 		
 	def _on_key_release(self, event):
 		'''
 		internal method, called by _on_key_release_repeat only when key is actually released
 		this then calls the method that was passed in to the bind method
 		'''
-		evdict, generic = self._get_evdict(event)
-		if not evdict:
-			return
-		evdict['has_prev_key_release'] = None
-		
-		evdict['KeyRelease'](event)
-		if generic:
-			self._binding_dict['KeyPress'][event.keysym] = False
-		else:
-			evdict['has_prev_key_press'] = False
+		# get all binding details
+		for d, evdict, generic in self._get_evdict(event):
+			# call callback
+			res = evdict['KeyRelease'](event)
+			evdict['has_prev_key_release'] = None
+			
+			# record that key was released
+			if generic:
+				d['KeyPress'][event.keysym] = False
+			else:
+				evdict['has_prev_key_press'] = False
+			# if supposed to break propagate this up
+			if res == 'break':
+				return 'break'
 		
 	def _on_key_release_repeat(self, event):
 		'''
 		internal method, called by the 'KeyRelease' event, used to filter false events
 		'''
-		evdict, generic = self._get_evdict(event)
-		if not evdict:
-			return
-		evdict["has_prev_key_release"] = self.after_idle(self._on_key_release, event)
+		# get all binding details
+		for d, evdict, generic in self._get_evdict(event):
+			if evdict["has_prev_key_release"]:
+				# got a previous release so cancel it
+				self.after_cancel(evdict["has_prev_key_release"])
+				evdict["has_prev_key_release"] = None
+			# queue new event for key release
+			evdict["has_prev_key_release"] = self.after_idle(self._on_key_release, event)
 		
 	def _on_key_press(self, event):
 		'''
 		internal method, called by _on_key_press_repeat only when key is actually pressed
 		this then calls the method that was passed in to the bind method
 		'''
-		evdict, generic = self._get_evdict(event)
-		if not evdict:
-			return
-		evdict['KeyPress'](event)
-		if generic:
-			evdict[event.keysym] = True
-		else:
-			evdict['has_prev_key_press'] = True
+		# get all binding details
+		for d, evdict, generic in self._get_evdict(event):
+			# call callback
+			res = evdict['KeyPress'](event)
+			# record that key was pressed
+			if generic:
+				evdict[event.keysym] = True
+			else:
+				evdict['has_prev_key_press'] = True
+			# if supposed to break propagate this up
+			if res == 'break':
+				return 'break'
 		
 	def _on_key_press_repeat(self, event):
 		'''
 		internal method, called by the 'KeyPress' event, used to filter false events
 		'''
-		evdict, generic = self._get_evdict(event)
-		if not evdict:
-			return
-		if not generic:
-			if evdict["has_prev_key_release"]:
-				self.after_cancel(evdict["has_prev_key_release"])
-				evdict["has_prev_key_release"] = None
+		# get binding details
+		for d, evdict, generic in self._get_evdict(event):
+			if not generic:
+				if evdict["has_prev_key_release"]:
+					# got a previous release so cancel it
+					self.after_cancel(evdict["has_prev_key_release"])
+					evdict["has_prev_key_release"] = None
+				else:
+					# if not pressed before (real event)
+					if evdict['has_prev_key_press'] == False:
+						self._on_key_press(event)
 			else:
-				if evdict['has_prev_key_press'] == False:
+				# if not pressed before (real event)
+				if (event.keysym not in evdict) or (evdict[event.keysym] == False):
 					self._on_key_press(event)
-		else:
-			if (event.keysym not in evdict) or (evdict[event.keysym] == False):
-				self._on_key_press(event)
-				
-				
-		
+
 class DebounceTk(Debounce, tk.Tk):
 	pass
 
@@ -142,29 +221,43 @@ class DebounceFrame(Debounce, tk.Frame):
 	pass
 	
 if __name__ == '__main__':
-	def press(event):
-		print("pressed:", event.keysym, file=sys.stderr)
+	def instance_press(event):
+		print("instance_press:\t%s\t%s" % (event.widget, event.keysym))
 		
-	def release(event):
-		print("released:", event.keysym, file=sys.stderr)
+	def instance_release(event):
+		print("instance_release:\t%s\t%s" % (event.widget, event.keysym))
 		
-	def press2(event):
-		print("pressed2:", event.keysym, file=sys.stderr)
+	def class_press(event):
+		print("class_press:\t%s\t%s" % (event.widget, event.keysym))
 		
-	def release2(event):
-		print("released2:", event.keysym, file=sys.stderr)
+	def class_release(event):
+		print("class_release:\t%s\t%s" % (event.widget, event.keysym))
+		
+	def all_press(event):
+		print("all_press:\t%s\t%s" % (event.widget, event.keysym))
+		
+	def all_release(event):
+		print("all_release:\t%s\t%s" % (event.widget, event.keysym))
 
-	root = DebounceTk()
-	frame = DebounceFrame(root, width=100, height=100)
-	frame.bind("<KeyRelease-a>", release)
-	frame.bind("<KeyPress-a>", press)
-	frame.bind("<KeyRelease-s>", release)
-	frame.bind("<KeyPress-s>", press)
+	root = tk.Tk()
+	frame = DebounceFrame(root, width=100, height=100, bg='red', takefocus=True)
+	frame2 = DebounceFrame(root, width=100, height=100, bg='blue', takefocus=True)
+	frame.bind("<KeyPress-a>", instance_press, False)
+	frame.bind("<KeyRelease-a>", instance_release, False)
+	frame.bind("<KeyPress-s>", instance_press)
+	frame.bind("<KeyRelease-s>", instance_release)
+	
+	frame.bind_class("<KeyPress-d>", class_press)
+	frame.bind_class("<KeyRelease-d>", class_release)
+	
+	frame.bind_all('<KeyPress-F1>', all_press)
+	frame.bind_all('<KeyRelease-F1>', all_release)
 
-	frame.bind("<KeyRelease>", release2)
-	frame.bind("<KeyPress>", press2)
+	frame2.bind("<KeyPress-f>", instance_press)
+	frame2.bind("<KeyRelease-f>", instance_release)
 
 	frame.pack()
+	frame2.pack()
 	frame.focus_set()
 
 	root.mainloop()
