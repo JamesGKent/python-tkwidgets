@@ -55,7 +55,8 @@ class ScrolledFrame:
                 'grid_columnconfigure',
                 'grid_rowconfigure',
                 'winfo_reqwidth',
-                'winfo_reqheight']:
+                'winfo_reqheight',
+                'configure']:
             self.outer_attr.discard(attr)
 
     def __getattr__(self, item):
